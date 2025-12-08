@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <title>ควบคุม LED Display (ESP32)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, #101827, #020617);
+      color: #e5e7eb;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 640px;
+      margin: 16px;
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 18px;
+      box-shadow:
+        0 10px 40px rgba(15, 23, 42, 0.9),
+        0 0 0 1px rgba(148, 163, 184, 0.15);
+      padding: 20px 20px 24px;
+      backdrop-filter: blur(16px);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #22c55e, #0ea5e9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+      color: #0f172a;
+      box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.6);
+    }
+    .header-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .header-sub {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.14);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+      color: #cbd5f5;
+    }
+    label span {
+      font-size: 11px;
+      color: #6b7280;
+      margin-left: 4px;
+    }
+    input, select, button, textarea {
+      font-family: inherit;
+    }
+    .field {
+      margin-bottom: 14px;
+    }
+    .input, .select, .textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+    }
+    .input:focus, .select:focus, .textarea:focus {
+      border-color: rgba(56, 189, 248, 0.9);
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.7);
+      background: rgba(15, 23, 42, 1);
+    }
+    .color-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .color-row input[type="color"] {
+      width: 40px;
+      height: 32px;
+      padding: 0;
+      border-radius: 10px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: transparent;
+    }
+    .buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      margin-bottom: 14px;
+    }
+    .btn-primary {
+      flex: 2;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: none;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #022c22;
+      box-shadow:
+        0 10px 20px rgba(22, 163, 74, 0.4),
+        0 0 0 1px rgba(21, 128, 61, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-secondary {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-primary:disabled,
+    .btn-secondary:disabled {
+      opacity: 0.6;
+      cursor: default;
+      box-shadow: none;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 14px 0 8px;
+      color: #e2e8f0;
+    }
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .range-row input[type="range"] {
+      flex: 1;
+    }
+    .range-value {
+      min-width: 42px;
+      text-align: right;
+      font-size: 12px;
+      color: #cbd5f5;
+    }
+    .status {
+      font-size: 12px;
+      color: #9ca3af;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      margin-right: 4px;
+    }
+    .status-ok .status-dot {
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.9);
+    }
+    .status-error .status-dot {
+      background: #ef4444;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+    }
+    .preview-card {
+      border-radius: 14px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.08), rgba(15, 23, 42, 0.98));
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 60px;
+      position: relative;
+      overflow: hidden;
+    }
+    .preview-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .preview-logo img {
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+    }
+    .preview-text-wrap {
+      flex: 1;
+      overflow: hidden;
+    }
+    .preview-text {
+      font-size: 16px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .preview-meta {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-top: 2px;
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .chip {
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .chip-style {
+      border-color: rgba(56, 189, 248, 0.8);
+      color: #7dd3fc;
+    }
+    .chip-color {
+      border-color: rgba(34, 197, 94, 0.8);
+      color: #bbf7d0;
+    }
+    .chip-id {
+      border-color: rgba(129, 140, 248, 0.7);
+      color: #c7d2fe;
+    }
+    .preview-scanline {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(
+        to bottom,
+        rgba(15, 23, 42, 0.1),
+        rgba(15, 23, 42, 0.5) 50%,
+        rgba(15, 23, 42, 0.1)
+      );
+      background-size: 100% 3px;
+      mix-blend-mode: soft-light;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .helper {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .history-box {
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(15, 23, 42, 0.8);
+      max-height: 200px;
+      overflow: auto;
+    }
+    .history-item {
+      font-size: 12px;
+      border-bottom: 1px solid rgba(55, 65, 81, 0.6);
+      padding: 6px 0;
+      color: #e5e7eb;
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    .history-meta {
+      color: #9ca3af;
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .pill {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      margin-right: 6px;
+    }
+    .pill-blue {
+      color: #7dd3fc;
+      border-color: rgba(56, 189, 248, 0.7);
+    }
+    .pill-green {
+      color: #bbf7d0;
+      border-color: rgba(34, 197, 94, 0.7);
+    }
+    .pill-orange {
+      color: #fcd34d;
+      border-color: rgba(251, 191, 36, 0.7);
+    }
+    @media (max-width: 480px) {
+      .container {
+        padding: 16px 14px 20px;
+      }
+      .header-title {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-left">
+        <div class="header-logo">D</div>
+        <div>
+          <div class="header-title">CTN LED Display Control</div>
+          <div class="header-sub">ควบคุมป้าย ESP32 จากเว็บแอปผ่าน Firebase</div>
+        </div>
+      </div>
+      <div class="badge">Remote • Online</div>
+    </div>
+
+    <div class="field">
+      <label for="displayId">Display ID <span>(ใส่ชื่อป้าย เช่น main, front, room1)</span></label>
+      <input id="displayId" class="input" value="main" />
+    </div>
+
+    <div class="field">
+      <label for="logoUrl">URL โลโก้ <span>(ลิงก์รูป PNG/JPG ที่อยู่บนอินเทอร์เน็ต)</span></label>
+      <input id="logoUrl" class="input" placeholder="https://example.com/logo.png" />
+    </div>
+
+    <div class="field">
+      <label for="text">ข้อความบนป้าย</label>
+      <textarea id="text" class="textarea" rows="2" placeholder="ข้อความที่จะโชว์บนป้าย"></textarea>
+    </div>
+
+    <div class="field">
+      <label>สีข้อความ และรูปแบบการแสดงผล</label>
+      <div class="color-row">
+        <input id="colorPicker" type="color" value="#00ff00" />
+        <input id="colorHex" class="input" placeholder="#00ff00" value="#00ff00" />
+        <select id="style" class="select">
+          <option value="static">Static</option>
+          <option value="scroll">Scroll</option>
+          <option value="blink">Blink</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>ความเร็วการแสดงผล <span>(1 ช้า - 10 เร็ว ใช้กับ Scroll/Blink)</span></label>
+      <div class="range-row">
+        <input id="speed" type="range" min="1" max="10" value="5" />
+        <div class="range-value" id="speedValue">5</div>
+      </div>
+    </div>
+
+    <div class="buttons">
+      <button id="saveBtn" class="btn-primary">
+        <span>ส่งไปที่ป้าย</span>
+      </button>
+      <button id="refreshBtn" class="btn-secondary">
+        โหลดค่าจาก Firebase
+      </button>
+    </div>
+
+    <div class="status" id="statusRow">
+      <div>
+        <span class="status-dot"></span>
+        <span id="statusText">ยังไม่ได้เชื่อมต่อ Firebase</span>
+      </div>
+      <div id="updatedAtText"></div>
+    </div>
+
+    <div class="preview-card">
+      <div class="preview-logo">
+        <img id="previewLogo" alt="" />
+      </div>
+      <div class="preview-text-wrap">
+        <div id="previewText" class="preview-text">ข้อความตัวอย่าง</div>
+        <div class="preview-meta">
+          <span id="previewStyle" class="chip chip-style">STYLE: STATIC</span>
+          <span id="previewColor" class="chip chip-color">COLOR: #00FF00</span>
+          <span id="previewId" class="chip chip-id">ID: main</span>
+          <span id="previewSpeed" class="chip chip-style">SPEED: 5</span>
+        </div>
+      </div>
+      <div class="preview-scanline"></div>
+    </div>
+
+    <div class="helper">
+      1) ไปที่ Firebase Console → Project Settings → General → Your apps (Web) แล้วเอา config มาใส่ในส่วน
+      <b>firebaseConfig</b> ด้านล่างนี้<br />
+      2) ใช้ <b>Cloud Firestore</b> collection ชื่อ <b>display</b> document ตาม Display ID (เช่น main) ให้ ESP32 ดึงค่าจาก Firestore หรือจาก Cloud Function ก็ได้
+      <br />3) ระบบจะบันทึกประวัติการส่งคำสั่งไว้ 15 วันล่าสุดใน subcollection <b>logs</b> ของแต่ละป้าย
+    </div>
+
+    <div class="section-title">ประวัติการส่งคำสั่ง (ย้อนหลัง 15 วัน)</div>
+    <div id="historyBox" class="history-box">
+      <div class="history-item">ยังไม่มีข้อมูล</div>
+    </div>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // *** ใส่ค่า config ของโปรเจกต์ Firebase ของคุณเองตรงนี้ ***
+    // ไปที่ Firebase Console → Project settings → General → Your apps → Web app
+    const firebaseConfig = {
+      apiKey: "AIzaSyD7-OplahwpCAa7sbvHNPM5ORUHRHzzGtM",
+      authDomain: "ctn-display.firebaseapp.com",
+      projectId: "ctn-display",
+      storageBucket: "ctn-display.firebasestorage.app",
+      messagingSenderId: "71935501770",
+      appId: "1:71935501770:web:21cc80c2c8bea77d839b33",
+      measurementId: "G-J0Z4KEV0FE"
+    };
+
+    let db = null;
+    const statusRow = document.getElementById("statusRow");
+    const statusText = document.getElementById("statusText");
+    const updatedAtText = document.getElementById("updatedAtText");
+
+    function setStatus(ok, text) {
+      statusText.textContent = text;
+      if (ok) {
+        statusRow.classList.add("status-ok");
+        statusRow.classList.remove("status-error");
+      } else {
+        statusRow.classList.remove("status-ok");
+        statusRow.classList.add("status-error");
+      }
+    }
+
+    try {
+      firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+      setStatus(true, "เชื่อมต่อ Firebase แล้ว (พร้อมใช้งาน)");
+    } catch (e) {
+      console.error(e);
+      setStatus(false, "Firebase config ยังไม่ถูกต้อง หรือยังไม่ตั้งค่า");
+    }
+
+    const displayIdInput = document.getElementById("displayId");
+    const logoInput = document.getElementById("logoUrl");
+    const textInput = document.getElementById("text");
+    const colorPicker = document.getElementById("colorPicker");
+    const colorHexInput = document.getElementById("colorHex");
+    const styleSelect = document.getElementById("style");
+    const speedInput = document.getElementById("speed");
+    const speedValue = document.getElementById("speedValue");
+    const saveBtn = document.getElementById("saveBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    const previewLogo = document.getElementById("previewLogo");
+    const previewText = document.getElementById("previewText");
+    const previewStyle = document.getElementById("previewStyle");
+    const previewColor = document.getElementById("previewColor");
+    const previewId = document.getElementById("previewId");
+    const previewSpeed = document.getElementById("previewSpeed");
+    const historyBox = document.getElementById("historyBox");
+
+    let unsubscribeDisplay = null;
+
+    function normalizeHex(hex) {
+      if (!hex) return "#ffffff";
+      hex = hex.trim();
+      if (!hex.startsWith("#")) hex = "#" + hex;
+      if (hex.length === 4) {
+        // #rgb -> #rrggbb
+        const r = hex[1];
+        const g = hex[2];
+        const b = hex[3];
+        hex = "#" + r + r + g + g + b + b;
+      }
+      return hex.toUpperCase();
+    }
+
+    function updatePreview() {
+      const id = displayIdInput.value || "main";
+      const logoUrl = logoInput.value.trim();
+      const text = textInput.value.trim() || "ข้อความตัวอย่าง";
+      const colorHex = normalizeHex(colorHexInput.value || colorPicker.value || "#ffffff");
+      const style = styleSelect.value || "static";
+      const speed = Number(speedInput.value || 5);
+
+      previewLogo.src = logoUrl || "";
+      previewText.textContent = text;
+      previewText.style.color = colorHex;
+      previewStyle.textContent = "STYLE: " + style.toUpperCase();
+      previewColor.textContent = "COLOR: " + colorHex;
+      previewId.textContent = "ID: " + id;
+      previewSpeed.textContent = "SPEED: " + speed;
+      speedValue.textContent = speed;
+    }
+
+    logoInput.addEventListener("input", updatePreview);
+    textInput.addEventListener("input", updatePreview);
+    colorPicker.addEventListener("input", (e) => {
+      colorHexInput.value = e.target.value.toUpperCase();
+      updatePreview();
+    });
+    colorHexInput.addEventListener("input", updatePreview);
+    styleSelect.addEventListener("change", updatePreview);
+    displayIdInput.addEventListener("input", updatePreview);
+    speedInput.addEventListener("input", updatePreview);
+
+    function renderHistory(items) {
+      if (!items.length) {
+        historyBox.innerHTML = '<div class="history-item">ยังไม่มีข้อมูล</div>';
+        return;
+      }
+      historyBox.innerHTML = items.map((item) => {
+        const dateText = new Date(item.ts).toLocaleString("th-TH");
+        return `
+          <div class="history-item">
+            <div><span class="pill pill-blue">${item.style || "static"}</span>
+            <span class="pill pill-green">สี ${item.color || "-"}</span>
+            <span class="pill pill-orange">สปีด ${item.speed || "-"}</span></div>
+            <div>${item.text ? item.text.replace(/</g,"&lt;") : "(ว่าง)"}</div>
+            <div class="history-meta">${dateText}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function loadHistory(id) {
+      if (!db) return;
+      const now = Date.now();
+      const since = now - 15 * 24 * 60 * 60 * 1000;
+      try {
+        const snap = await db
+          .collection("display")
+          .doc(id)
+          .collection("logs")
+          .where("ts", ">=", since)
+          .orderBy("ts", "desc")
+          .limit(50)
+          .get();
+        const items = snap.docs.map((d) => d.data());
+        renderHistory(items);
+      } catch (e) {
+        console.error("โหลดประวัติล้มเหลว", e);
+        historyBox.innerHTML = '<div class="history-item">โหลดประวัติไม่สำเร็จ</div>';
+      }
+    }
+
+    function watchDisplay(id) {
+      if (!db) return;
+      if (unsubscribeDisplay) {
+        unsubscribeDisplay();
+        unsubscribeDisplay = null;
+      }
+      unsubscribeDisplay = db
+        .collection("display")
+        .doc(id)
+        .onSnapshot((doc) => {
+          if (!doc.exists) {
+            setStatus(true, "ยังไม่มีข้อมูลใน Firestore (จะถูกสร้างเมื่อกดบันทึก)");
+            return;
+          }
+          const data = doc.data();
+          logoInput.value = data.logoUrl || "";
+          textInput.value = data.text || "";
+          const color = data.color || "#ffffff";
+          colorPicker.value = color;
+          colorHexInput.value = color;
+          styleSelect.value = data.style || "static";
+          speedInput.value = data.speed || 5;
+          if (data.updatedAt) {
+            const d = new Date(data.updatedAt);
+            updatedAtText.textContent = "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
+          }
+          updatePreview();
+          setStatus(true, "Realtime sync จาก Firestore");
+        }, (err) => {
+          console.error(err);
+          setStatus(false, "Realtime sync มีปัญหา");
+        });
+      loadHistory(id);
+    }
+
+    async function loadFromFirestore() {
+      if (!db) {
+        alert("ยังไม่ได้ตั้งค่า Firebase config");
+        return;
+      }
+      const id = (displayIdInput.value || "main").trim();
+      try {
+        const snap = await db.collection("display").doc(id).get();
+        if (!snap.exists) {
+          alert("ยังไม่มี document ใน Firestore สำหรับ ID นี้ (จะสร้างใหม่ตอนกดบันทึก)");
+          return;
+        }
+        const data = snap.data();
+        logoInput.value = data.logoUrl || "";
+        textInput.value = data.text || "";
+        const color = data.color || "#ffffff";
+        colorPicker.value = color;
+        colorHexInput.value = color;
+        styleSelect.value = data.style || "static";
+        speedInput.value = data.speed || 5;
+        if (data.updatedAt) {
+          const d = new Date(data.updatedAt);
+          updatedAtText.textContent =
+            "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
+        }
+        updatePreview();
+        setStatus(true, "โหลดค่า Firestore สำเร็จ");
+        loadHistory(id);
+      } catch (e) {
+        console.error(e);
+        setStatus(false, "โหลดจาก Firestore ไม่สำเร็จ");
+        alert("โหลดค่าจาก Firebase ล้มเหลว (ดู console log)");
+      }
+    }
+
+    async function saveToFirestore() {
+      if (!db) {
+        alert("ยังไม่ได้ตั้งค่า Firebase config");
+        return;
+      }
+      const id = (displayIdInput.value || "main").trim();
+      const data = {
+        logoUrl: logoInput.value.trim(),
+        text: textInput.value.trim(),
+        color: normalizeHex(colorHexInput.value || colorPicker.value),
+        style: styleSelect.value || "static",
+        speed: Number(speedInput.value || 5),
+        updatedAt: Date.now(),
+      };
+      saveBtn.disabled = true;
+      saveBtn.textContent = "กำลังบันทึก...";
+      try {
+        const ts = Date.now();
+        const logsRef = db.collection("display").doc(id).collection("logs");
+        await Promise.all([
+          db.collection("display").doc(id).set(data, { merge: true }),
+          logsRef.add({
+            action: "update",
+            ts,
+            text: data.text,
+            color: data.color,
+            style: data.style,
+            speed: data.speed,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          }),
+        ]);
+        const d = new Date(data.updatedAt);
+        updatedAtText.textContent =
+          "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
+        setStatus(true, "ส่งไปที่ป้ายเรียบร้อย (Firestore อัปเดตแล้ว)");
+        loadHistory(id);
+      } catch (e) {
+        console.error(e);
+        setStatus(false, "บันทึกไป Firestore ล้มเหลว");
+        alert("บันทึกไป Firebase ล้มเหลว (ดู console log)");
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "ส่งไปที่ป้าย";
+      }
+    }
+
+    saveBtn.addEventListener("click", saveToFirestore);
+    refreshBtn.addEventListener("click", loadFromFirestore);
+
+    // first preview + realtime subscribe
+    updatePreview();
+    if (db) {
+      watchDisplay(displayIdInput.value || "main");
+    }
+  </script>
+</body>
+</html>
+
+
