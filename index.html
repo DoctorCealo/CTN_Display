@@ -89,45 +89,6 @@
     .field {
       margin-bottom: 14px;
     }
-    .dropzone {
-      border: 1.5px dashed rgba(148, 163, 184, 0.55);
-      border-radius: 12px;
-      padding: 16px 12px;
-      text-align: center;
-      background: rgba(15, 23, 42, 0.7);
-      cursor: pointer;
-      transition: border-color 0.15s, background 0.15s;
-    }
-    .dropzone:hover,
-    .dropzone.is-dragover {
-      border-color: rgba(56, 189, 248, 0.9);
-      background: rgba(14, 116, 144, 0.18);
-    }
-    .dropzone-title {
-      font-size: 13px;
-      color: #e2e8f0;
-      margin-bottom: 4px;
-    }
-    .dropzone-sub {
-      font-size: 11px;
-      color: #6b7280;
-    }
-    .dropzone-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .dropzone-actions button {
-      padding: 6px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.5);
-      background: rgba(15, 23, 42, 0.9);
-      color: #e5e7eb;
-      font-size: 12px;
-      cursor: pointer;
-    }
     .input, .select, .textarea {
       width: 100%;
       padding: 8px 10px;
@@ -394,17 +355,8 @@
     </div>
 
     <div class="field">
-      <label>โลโก้ <span>(ลากไฟล์รูปมาวาง หรือคลิกเพื่อเลือก PNG/JPG)</span></label>
-      <div id="logoDropzone" class="dropzone">
-        <div class="dropzone-title">วางไฟล์โลโก้ที่นี่</div>
-        <div class="dropzone-sub" id="logoDropHint">รองรับ PNG, JPG ขนาดไม่เกิน 2MB</div>
-        <div class="dropzone-actions">
-          <button type="button" id="logoPickBtn">เลือกไฟล์</button>
-          <button type="button" id="logoClearBtn">ลบโลโก้</button>
-        </div>
-      </div>
-      <input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
-      <input id="logoUrl" type="hidden" value="" />
+      <label for="logoUrl">URL โลโก้ <span>(ลิงก์รูป PNG/JPG บนอินเทอร์เน็ต)</span></label>
+      <input id="logoUrl" class="input" placeholder="https://example.com/logo.png" />
     </div>
 
     <div class="field">
@@ -466,9 +418,8 @@
     </div>
 
     <div class="helper">
-      โครงระบบ: หน้าเว็บโฮสต์บน <b>GitHub Pages</b> → ส่งคำสั่งเข้า <b>Firebase</b> → ป้าย <b>ESP32-S3</b> ดึงค่าจาก Firestore<br />
-      โลโก้จะอัปโหลดขึ้น <b>Firebase Storage</b> แล้วเก็บ URL ไว้ในเอกสาร <b>display/main</b><br />
-      ใน Storage Rules ต้องอนุญาตให้อัปโหลดโฟลเดอร์ <b>logos/</b> ได้ และ Firestore ต้องให้อ่าน/เขียนเอกสารนี้ได้
+      โครงระบบ: หน้าเว็บโฮสต์บน <b>GitHub Pages</b> → ส่งคำสั่งเข้า <b>Firestore</b> → ป้าย <b>ESP32-S3</b> ดึงค่าจากเอกสาร <b>display/main</b><br />
+      โลโก้ใส่เป็น URL รูปภายนอก (ไม่ใช้ Firebase Storage) — Firestore เก็บแค่ลิงก์ข้อความ ค่าสี และสไตล์
     </div>
 
     <div class="section-title">ประวัติการส่งคำสั่ง (ย้อนหลัง 15 วัน)</div>
@@ -480,7 +431,6 @@
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-storage-compat.js"></script>
 
   <script>
     // *** ใส่ค่า config ของโปรเจกต์ Firebase ของคุณเองตรงนี้ ***
@@ -497,7 +447,6 @@
 
     const DISPLAY_ID = "main";
     let db = null;
-    let storage = null;
     const statusRow = document.getElementById("statusRow");
     const statusText = document.getElementById("statusText");
     const updatedAtText = document.getElementById("updatedAtText");
@@ -516,7 +465,6 @@
     try {
       firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
-      storage = firebase.storage();
       setStatus(true, "เชื่อมต่อ Firebase แล้ว (พร้อมใช้งาน)");
     } catch (e) {
       console.error(e);
@@ -524,11 +472,6 @@
     }
 
     const logoInput = document.getElementById("logoUrl");
-    const logoFile = document.getElementById("logoFile");
-    const logoDropzone = document.getElementById("logoDropzone");
-    const logoDropHint = document.getElementById("logoDropHint");
-    const logoPickBtn = document.getElementById("logoPickBtn");
-    const logoClearBtn = document.getElementById("logoClearBtn");
     const textInput = document.getElementById("text");
     const colorPicker = document.getElementById("colorPicker");
     const colorHexInput = document.getElementById("colorHex");
@@ -546,7 +489,6 @@
     const historyBox = document.getElementById("historyBox");
 
     let unsubscribeDisplay = null;
-    let uploadingLogo = false;
 
     function normalizeHex(hex) {
       if (!hex) return "#ffffff";
@@ -587,9 +529,6 @@
       previewColor.textContent = "COLOR: " + colorHex;
       previewSpeed.textContent = "SPEED: " + speed;
       speedValue.textContent = speed;
-      logoDropHint.textContent = logoUrl
-        ? "มีโลโก้แล้ว พร้อมส่งไปที่ป้าย"
-        : "รองรับ PNG, JPG ขนาดไม่เกิน 2MB";
     }
 
     function applyDisplayData(data) {
@@ -607,76 +546,7 @@
       updatePreview();
     }
 
-    async function uploadLogoFile(file) {
-      if (!storage) {
-        alert("ยังไม่ได้เชื่อมต่อ Firebase Storage");
-        return;
-      }
-      if (!file || !file.type.startsWith("image/")) {
-        alert("เลือกไฟล์รูปภาพเท่านั้น");
-        return;
-      }
-      if (file.size > 2 * 1024 * 1024) {
-        alert("ไฟล์ใหญ่เกิน 2MB");
-        return;
-      }
-
-      uploadingLogo = true;
-      logoDropHint.textContent = "กำลังอัปโหลดโลโก้...";
-      setStatus(true, "กำลังอัปโหลดโลโก้ขึ้น Firebase Storage");
-      try {
-        const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-        const path = "logos/" + DISPLAY_ID + "/" + Date.now() + "_" + safeName;
-        const ref = storage.ref().child(path);
-        await ref.put(file, { contentType: file.type });
-        const url = await ref.getDownloadURL();
-        logoInput.value = url;
-        updatePreview();
-        setStatus(true, "อัปโหลดโลโก้สำเร็จ");
-      } catch (e) {
-        console.error(e);
-        setStatus(false, "อัปโหลดโลโก้ล้มเหลว");
-        alert("อัปโหลดโลโก้ล้มเหลว ตรวจ Storage Rules และการเปิดใช้งาน Storage");
-      } finally {
-        uploadingLogo = false;
-      }
-    }
-
-    logoPickBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      logoFile.click();
-    });
-    logoClearBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      logoInput.value = "";
-      logoFile.value = "";
-      updatePreview();
-    });
-    logoDropzone.addEventListener("click", () => logoFile.click());
-    logoFile.addEventListener("change", () => {
-      if (logoFile.files && logoFile.files[0]) uploadLogoFile(logoFile.files[0]);
-    });
-    ["dragenter", "dragover"].forEach((evt) => {
-      logoDropzone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        logoDropzone.classList.add("is-dragover");
-      });
-    });
-    ["dragleave", "drop"].forEach((evt) => {
-      logoDropzone.addEventListener(evt, (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        logoDropzone.classList.remove("is-dragover");
-      });
-    });
-    logoDropzone.addEventListener("drop", (e) => {
-      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (file) uploadLogoFile(file);
-    });
-
+    logoInput.addEventListener("input", updatePreview);
     textInput.addEventListener("input", updatePreview);
     colorPicker.addEventListener("input", (e) => {
       colorHexInput.value = e.target.value.toUpperCase();
@@ -773,10 +643,6 @@
     async function saveToFirestore() {
       if (!db) {
         alert("ยังไม่ได้ตั้งค่า Firebase config");
-        return;
-      }
-      if (uploadingLogo) {
-        alert("กำลังอัปโหลดโลโก้ รอสักครู่แล้วค่อยส่ง");
         return;
       }
       const data = {
