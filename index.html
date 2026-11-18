@@ -89,6 +89,45 @@
     .field {
       margin-bottom: 14px;
     }
+    .dropzone {
+      border: 1.5px dashed rgba(148, 163, 184, 0.55);
+      border-radius: 12px;
+      padding: 16px 12px;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.7);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .dropzone:hover,
+    .dropzone.is-dragover {
+      border-color: rgba(56, 189, 248, 0.9);
+      background: rgba(14, 116, 144, 0.18);
+    }
+    .dropzone-title {
+      font-size: 13px;
+      color: #e2e8f0;
+      margin-bottom: 4px;
+    }
+    .dropzone-sub {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .dropzone-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .dropzone-actions button {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      color: #e5e7eb;
+      font-size: 12px;
+      cursor: pointer;
+    }
     .input, .select, .textarea {
       width: 100%;
       padding: 8px 10px;
@@ -355,13 +394,17 @@
     </div>
 
     <div class="field">
-      <label for="displayId">Display ID <span>(ใส่ชื่อป้าย เช่น main, front, room1)</span></label>
-      <input id="displayId" class="input" value="main" />
-    </div>
-
-    <div class="field">
-      <label for="logoUrl">URL โลโก้ <span>(ลิงก์รูป PNG/JPG ที่อยู่บนอินเทอร์เน็ต)</span></label>
-      <input id="logoUrl" class="input" placeholder="https://example.com/logo.png" />
+      <label>โลโก้ <span>(ลากไฟล์รูปมาวาง หรือคลิกเพื่อเลือก PNG/JPG)</span></label>
+      <div id="logoDropzone" class="dropzone">
+        <div class="dropzone-title">วางไฟล์โลโก้ที่นี่</div>
+        <div class="dropzone-sub" id="logoDropHint">รองรับ PNG, JPG ขนาดไม่เกิน 2MB</div>
+        <div class="dropzone-actions">
+          <button type="button" id="logoPickBtn">เลือกไฟล์</button>
+          <button type="button" id="logoClearBtn">ลบโลโก้</button>
+        </div>
+      </div>
+      <input id="logoFile" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+      <input id="logoUrl" type="hidden" value="" />
     </div>
 
     <div class="field">
@@ -416,7 +459,6 @@
         <div class="preview-meta">
           <span id="previewStyle" class="chip chip-style">STYLE: STATIC</span>
           <span id="previewColor" class="chip chip-color">COLOR: #00FF00</span>
-          <span id="previewId" class="chip chip-id">ID: main</span>
           <span id="previewSpeed" class="chip chip-style">SPEED: 5</span>
         </div>
       </div>
@@ -424,10 +466,9 @@
     </div>
 
     <div class="helper">
-      1) ไปที่ Firebase Console → Project Settings → General → Your apps (Web) แล้วเอา config มาใส่ในส่วน
-      <b>firebaseConfig</b> ด้านล่างนี้<br />
-      2) ใช้ <b>Cloud Firestore</b> collection ชื่อ <b>display</b> document ตาม Display ID (เช่น main) ให้ ESP32 ดึงค่าจาก Firestore หรือจาก Cloud Function ก็ได้
-      <br />3) ระบบจะบันทึกประวัติการส่งคำสั่งไว้ 15 วันล่าสุดใน subcollection <b>logs</b> ของแต่ละป้าย
+      โครงระบบ: หน้าเว็บโฮสต์บน <b>GitHub Pages</b> → ส่งคำสั่งเข้า <b>Firebase</b> → ป้าย <b>ESP32-S3</b> ดึงค่าจาก Firestore<br />
+      โลโก้จะอัปโหลดขึ้น <b>Firebase Storage</b> แล้วเก็บ URL ไว้ในเอกสาร <b>display/main</b><br />
+      ใน Storage Rules ต้องอนุญาตให้อัปโหลดโฟลเดอร์ <b>logos/</b> ได้ และ Firestore ต้องให้อ่าน/เขียนเอกสารนี้ได้
     </div>
 
     <div class="section-title">ประวัติการส่งคำสั่ง (ย้อนหลัง 15 วัน)</div>
@@ -439,6 +480,7 @@
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.0/firebase-storage-compat.js"></script>
 
   <script>
     // *** ใส่ค่า config ของโปรเจกต์ Firebase ของคุณเองตรงนี้ ***
@@ -453,7 +495,9 @@
       measurementId: "G-J0Z4KEV0FE"
     };
 
+    const DISPLAY_ID = "main";
     let db = null;
+    let storage = null;
     const statusRow = document.getElementById("statusRow");
     const statusText = document.getElementById("statusText");
     const updatedAtText = document.getElementById("updatedAtText");
@@ -472,14 +516,19 @@
     try {
       firebase.initializeApp(firebaseConfig);
       db = firebase.firestore();
+      storage = firebase.storage();
       setStatus(true, "เชื่อมต่อ Firebase แล้ว (พร้อมใช้งาน)");
     } catch (e) {
       console.error(e);
       setStatus(false, "Firebase config ยังไม่ถูกต้อง หรือยังไม่ตั้งค่า");
     }
 
-    const displayIdInput = document.getElementById("displayId");
     const logoInput = document.getElementById("logoUrl");
+    const logoFile = document.getElementById("logoFile");
+    const logoDropzone = document.getElementById("logoDropzone");
+    const logoDropHint = document.getElementById("logoDropHint");
+    const logoPickBtn = document.getElementById("logoPickBtn");
+    const logoClearBtn = document.getElementById("logoClearBtn");
     const textInput = document.getElementById("text");
     const colorPicker = document.getElementById("colorPicker");
     const colorHexInput = document.getElementById("colorHex");
@@ -493,18 +542,17 @@
     const previewText = document.getElementById("previewText");
     const previewStyle = document.getElementById("previewStyle");
     const previewColor = document.getElementById("previewColor");
-    const previewId = document.getElementById("previewId");
     const previewSpeed = document.getElementById("previewSpeed");
     const historyBox = document.getElementById("historyBox");
 
     let unsubscribeDisplay = null;
+    let uploadingLogo = false;
 
     function normalizeHex(hex) {
       if (!hex) return "#ffffff";
       hex = hex.trim();
       if (!hex.startsWith("#")) hex = "#" + hex;
       if (hex.length === 4) {
-        // #rgb -> #rrggbb
         const r = hex[1];
         const g = hex[2];
         const b = hex[3];
@@ -513,25 +561,122 @@
       return hex.toUpperCase();
     }
 
+    // เตรียมข้อความไทยให้สระติดตัวอักษรบนแผง LED มากขึ้น
+    // โดยแยก ำ (U+0E33) เป็น ํ + า และตัดอักขระควบคุมที่ทำให้เว้นช่อง
+    function normalizeThaiText(text) {
+      if (!text) return "";
+      return text
+        .normalize("NFC")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .replace(/\u0E33/g, "\u0E4D\u0E32")
+        .trim();
+    }
+
     function updatePreview() {
-      const id = displayIdInput.value || "main";
       const logoUrl = logoInput.value.trim();
-      const text = textInput.value.trim() || "ข้อความตัวอย่าง";
+      const text = normalizeThaiText(textInput.value) || "ข้อความตัวอย่าง";
       const colorHex = normalizeHex(colorHexInput.value || colorPicker.value || "#ffffff");
       const style = styleSelect.value || "static";
       const speed = Number(speedInput.value || 5);
 
       previewLogo.src = logoUrl || "";
+      previewLogo.style.display = logoUrl ? "block" : "none";
       previewText.textContent = text;
       previewText.style.color = colorHex;
       previewStyle.textContent = "STYLE: " + style.toUpperCase();
       previewColor.textContent = "COLOR: " + colorHex;
-      previewId.textContent = "ID: " + id;
       previewSpeed.textContent = "SPEED: " + speed;
       speedValue.textContent = speed;
+      logoDropHint.textContent = logoUrl
+        ? "มีโลโก้แล้ว พร้อมส่งไปที่ป้าย"
+        : "รองรับ PNG, JPG ขนาดไม่เกิน 2MB";
     }
 
-    logoInput.addEventListener("input", updatePreview);
+    function applyDisplayData(data) {
+      logoInput.value = data.logoUrl || "";
+      textInput.value = data.text || "";
+      const color = data.color || "#ffffff";
+      colorPicker.value = color;
+      colorHexInput.value = color;
+      styleSelect.value = data.style || "static";
+      speedInput.value = data.speed || 5;
+      if (data.updatedAt) {
+        const d = new Date(data.updatedAt);
+        updatedAtText.textContent = "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
+      }
+      updatePreview();
+    }
+
+    async function uploadLogoFile(file) {
+      if (!storage) {
+        alert("ยังไม่ได้เชื่อมต่อ Firebase Storage");
+        return;
+      }
+      if (!file || !file.type.startsWith("image/")) {
+        alert("เลือกไฟล์รูปภาพเท่านั้น");
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        alert("ไฟล์ใหญ่เกิน 2MB");
+        return;
+      }
+
+      uploadingLogo = true;
+      logoDropHint.textContent = "กำลังอัปโหลดโลโก้...";
+      setStatus(true, "กำลังอัปโหลดโลโก้ขึ้น Firebase Storage");
+      try {
+        const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+        const path = "logos/" + DISPLAY_ID + "/" + Date.now() + "_" + safeName;
+        const ref = storage.ref().child(path);
+        await ref.put(file, { contentType: file.type });
+        const url = await ref.getDownloadURL();
+        logoInput.value = url;
+        updatePreview();
+        setStatus(true, "อัปโหลดโลโก้สำเร็จ");
+      } catch (e) {
+        console.error(e);
+        setStatus(false, "อัปโหลดโลโก้ล้มเหลว");
+        alert("อัปโหลดโลโก้ล้มเหลว ตรวจ Storage Rules และการเปิดใช้งาน Storage");
+      } finally {
+        uploadingLogo = false;
+      }
+    }
+
+    logoPickBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      logoFile.click();
+    });
+    logoClearBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      logoInput.value = "";
+      logoFile.value = "";
+      updatePreview();
+    });
+    logoDropzone.addEventListener("click", () => logoFile.click());
+    logoFile.addEventListener("change", () => {
+      if (logoFile.files && logoFile.files[0]) uploadLogoFile(logoFile.files[0]);
+    });
+    ["dragenter", "dragover"].forEach((evt) => {
+      logoDropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        logoDropzone.classList.add("is-dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach((evt) => {
+      logoDropzone.addEventListener(evt, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        logoDropzone.classList.remove("is-dragover");
+      });
+    });
+    logoDropzone.addEventListener("drop", (e) => {
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) uploadLogoFile(file);
+    });
+
     textInput.addEventListener("input", updatePreview);
     colorPicker.addEventListener("input", (e) => {
       colorHexInput.value = e.target.value.toUpperCase();
@@ -539,7 +684,6 @@
     });
     colorHexInput.addEventListener("input", updatePreview);
     styleSelect.addEventListener("change", updatePreview);
-    displayIdInput.addEventListener("input", updatePreview);
     speedInput.addEventListener("input", updatePreview);
 
     function renderHistory(items) {
@@ -596,19 +740,7 @@
             setStatus(true, "ยังไม่มีข้อมูลใน Firestore (จะถูกสร้างเมื่อกดบันทึก)");
             return;
           }
-          const data = doc.data();
-          logoInput.value = data.logoUrl || "";
-          textInput.value = data.text || "";
-          const color = data.color || "#ffffff";
-          colorPicker.value = color;
-          colorHexInput.value = color;
-          styleSelect.value = data.style || "static";
-          speedInput.value = data.speed || 5;
-          if (data.updatedAt) {
-            const d = new Date(data.updatedAt);
-            updatedAtText.textContent = "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
-          }
-          updatePreview();
+          applyDisplayData(doc.data());
           setStatus(true, "Realtime sync จาก Firestore");
         }, (err) => {
           console.error(err);
@@ -622,29 +754,15 @@
         alert("ยังไม่ได้ตั้งค่า Firebase config");
         return;
       }
-      const id = (displayIdInput.value || "main").trim();
       try {
-        const snap = await db.collection("display").doc(id).get();
+        const snap = await db.collection("display").doc(DISPLAY_ID).get();
         if (!snap.exists) {
-          alert("ยังไม่มี document ใน Firestore สำหรับ ID นี้ (จะสร้างใหม่ตอนกดบันทึก)");
+          alert("ยังไม่มี document ใน Firestore (จะสร้างใหม่ตอนกดบันทึก)");
           return;
         }
-        const data = snap.data();
-        logoInput.value = data.logoUrl || "";
-        textInput.value = data.text || "";
-        const color = data.color || "#ffffff";
-        colorPicker.value = color;
-        colorHexInput.value = color;
-        styleSelect.value = data.style || "static";
-        speedInput.value = data.speed || 5;
-        if (data.updatedAt) {
-          const d = new Date(data.updatedAt);
-          updatedAtText.textContent =
-            "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
-        }
-        updatePreview();
+        applyDisplayData(snap.data());
         setStatus(true, "โหลดค่า Firestore สำเร็จ");
-        loadHistory(id);
+        loadHistory(DISPLAY_ID);
       } catch (e) {
         console.error(e);
         setStatus(false, "โหลดจาก Firestore ไม่สำเร็จ");
@@ -657,10 +775,13 @@
         alert("ยังไม่ได้ตั้งค่า Firebase config");
         return;
       }
-      const id = (displayIdInput.value || "main").trim();
+      if (uploadingLogo) {
+        alert("กำลังอัปโหลดโลโก้ รอสักครู่แล้วค่อยส่ง");
+        return;
+      }
       const data = {
         logoUrl: logoInput.value.trim(),
-        text: textInput.value.trim(),
+        text: normalizeThaiText(textInput.value),
         color: normalizeHex(colorHexInput.value || colorPicker.value),
         style: styleSelect.value || "static",
         speed: Number(speedInput.value || 5),
@@ -670,9 +791,9 @@
       saveBtn.textContent = "กำลังบันทึก...";
       try {
         const ts = Date.now();
-        const logsRef = db.collection("display").doc(id).collection("logs");
+        const logsRef = db.collection("display").doc(DISPLAY_ID).collection("logs");
         await Promise.all([
-          db.collection("display").doc(id).set(data, { merge: true }),
+          db.collection("display").doc(DISPLAY_ID).set(data, { merge: true }),
           logsRef.add({
             action: "update",
             ts,
@@ -687,7 +808,7 @@
         updatedAtText.textContent =
           "อัปเดตล่าสุด: " + d.toLocaleString("th-TH");
         setStatus(true, "ส่งไปที่ป้ายเรียบร้อย (Firestore อัปเดตแล้ว)");
-        loadHistory(id);
+        loadHistory(DISPLAY_ID);
       } catch (e) {
         console.error(e);
         setStatus(false, "บันทึกไป Firestore ล้มเหลว");
@@ -701,10 +822,9 @@
     saveBtn.addEventListener("click", saveToFirestore);
     refreshBtn.addEventListener("click", loadFromFirestore);
 
-    // first preview + realtime subscribe
     updatePreview();
     if (db) {
-      watchDisplay(displayIdInput.value || "main");
+      watchDisplay(DISPLAY_ID);
     }
   </script>
 </body>
